@@ -1,5 +1,6 @@
 package pw.stamina.keybinds.test;
 
+import it.unimi.dsi.fastutil.ints.Int2BooleanOpenHashMap;
 import pw.stamina.keybinds.core.Keybind;
 
 import java.util.*;
@@ -13,12 +14,9 @@ public final class TestBindingContext implements UpdatableBindingContext<Example
     private final Set<ExampleKey> keys;
     private final Consumer<Set<ExampleKey>> onRemoveLastBind;
 
-    private final int[] keyCodes;
-    private final int lowestKeycode;
-    private final int highestKeycode;
-    private final boolean[] keyStates;
+    private final Int2BooleanOpenHashMap keyStates;
 
-    private final Set<Keybind<ExampleKey>> boundActions;
+    private final Set<Keybind<ExampleKey>> keybindObjects;
     private final List<Runnable> actions;
 
     private int keysDown;
@@ -27,35 +25,27 @@ public final class TestBindingContext implements UpdatableBindingContext<Example
         this.keys = keys;
         this.onRemoveLastBind = onRemoveLastBind;
 
-        this.keyCodes = keys.stream().mapToInt(ExampleKey::getExampleKeycode).toArray();
-        this.lowestKeycode = getLowerKeycodeBound();
-        this.highestKeycode = getUpperKeycodeBound();
-        this.keyStates = new boolean[this.highestKeycode + 1];
+        this.keyStates = new Int2BooleanOpenHashMap(keys.size());
+        for (final ExampleKey key : keys) {
+            this.keyStates.put(key.getExampleKeycode(), false);
+        }
 
-        this.boundActions = new HashSet<>();
+        this.keybindObjects = new HashSet<>();
         this.actions = new ArrayList<>();
 
         this.keysDown = 0;
-    }
-
-    private int getLowerKeycodeBound() {
-        return Arrays.stream(this.keyCodes).min().orElseThrow(() -> new IllegalStateException("Keyset had zero elements"));
-    }
-
-    private int getUpperKeycodeBound() {
-        return Arrays.stream(this.keyCodes).max().orElseThrow(() -> new IllegalStateException("Keyset had zero elements"));
     }
 
     @Override
     public Keybind<ExampleKey> bind(final Runnable action) {
         final Keybind<ExampleKey> keybind = new TestKeybind(action, this.keys, self -> {
             this.actions.remove(self.getAction());
-            this.boundActions.remove(self);
-            if (this.boundActions.isEmpty()) {
+            this.keybindObjects.remove(self);
+            if (this.keybindObjects.isEmpty()) {
                 this.onRemoveLastBind.accept(keys);
             }
         });
-        this.boundActions.add(keybind);
+        this.keybindObjects.add(keybind);
 
         this.actions.add(action);
 
@@ -63,17 +53,17 @@ public final class TestBindingContext implements UpdatableBindingContext<Example
     }
 
     @Override
-    public Set<Keybind<ExampleKey>> getBoundActions() {
-        return Collections.unmodifiableSet(this.boundActions);
+    public Set<Keybind<ExampleKey>> getKeybinds() {
+        return Collections.unmodifiableSet(this.keybindObjects);
     }
 
     @Override
     public void onKeyPressed(final ExampleKey key) {
         final int keycode = key.getExampleKeycode();
-        if (keycode >= this.lowestKeycode && keycode <= this.highestKeycode) {
-            if (!this.keyStates[keycode]) {
-                this.keyStates[keycode] = true;
-                if (++this.keysDown == this.keyCodes.length) {
+        if (this.keyStates.containsKey(keycode)) {
+            if (!this.keyStates.get(keycode)) {
+                this.keyStates.put(keycode, true);
+                if (++this.keysDown == this.keyStates.size()) {
                     for (final Runnable action : this.actions) {
                         action.run();
                     }
@@ -85,9 +75,9 @@ public final class TestBindingContext implements UpdatableBindingContext<Example
     @Override
     public void onKeyReleased(final ExampleKey key) {
         final int keycode = key.getExampleKeycode();
-        if (keycode >= this.lowestKeycode && keycode <= this.highestKeycode) {
-            if (this.keyStates[keycode]) {
-                this.keyStates[keycode] = false;
+        if (this.keyStates.containsKey(keycode)) {
+            if (this.keyStates.get(keycode)) {
+                this.keyStates.put(keycode, false);
                 --this.keysDown;
             }
         }

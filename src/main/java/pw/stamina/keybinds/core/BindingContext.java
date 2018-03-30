@@ -8,5 +8,5 @@ import java.util.Set;
 public interface BindingContext<KeyType extends KeyboardKey> {
     Keybind<KeyType> bind(Runnable action);
 
-    Set<Keybind<KeyType>> getBoundActions();
+    Set<Keybind<KeyType>> getKeybinds();
 }
